@@ -10,7 +10,7 @@
   <!-- Custom Styles for Background -->
   <style>
     body {
-      background-image: url("{% static 'image/pexels-bri-schneiter-28802-346529.jpg' %}");
+      background-image: url("{% static 'image/university.jpg' %}");
       background-size: cover;
       background-repeat: no-repeat;
       background-position: center;
@@ -46,7 +46,16 @@
   </style>
 </head>
 
-<body class="min-h-screen flex items-center justify-center text-white">
+<body class="min-h-screen flex items-center justify-center px-4 text-white">
+
+  <button
+    type="button"
+    onclick="goBackOrHome()"
+    class="fixed left-4 top-4 z-10 inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-md transition duration-300 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/70 sm:left-6 sm:top-6"
+  >
+    <span aria-hidden="true">&larr;</span>
+    Back
+  </button>
 
   <div class="bg-glass shadow-2xl p-8 w-full max-w-md animate-fade-in-down">
     <h2 class="text-3xl font-bold text-center mb-6 text-white drop-shadow">Administrator Login</h2>
@@ -77,6 +86,17 @@
       </button>
     </form>
   </div>
+
+  <script>
+    function goBackOrHome() {
+      if (document.referrer && window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+
+      window.location.href = "{% url 'index' %}";
+    }
+  </script>
 
 </body>
 </html>

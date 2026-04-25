@@ -10,7 +10,7 @@
   <style>
     body {
       font-family: 'Inter', sans-serif;
-      background-image: url("{% static 'image/pexels-bri-schneiter-28802-346529.jpg' %}");
+      background-image: url("{% static 'image/university.jpg' %}");
       background-size: cover;
       background-repeat: no-repeat;
       background-position: center;
@@ -63,6 +63,17 @@
   </style>
 </head>
 <body class="relative min-h-screen p-6">
+
+  <div class="mb-6 flex justify-start">
+    <button
+      type="button"
+      onclick="goBackOrHome()"
+      class="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-md transition duration-300 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/70"
+    >
+      <span aria-hidden="true">&larr;</span>
+      Back
+    </button>
+  </div>
 
   <header class="mb-6 text-center">
     <h1 class="text-4xl font-extrabold animate-slide-in-top">📊 Admin Dashboard</h1>
@@ -127,5 +138,15 @@
 
   </div>
 
+  <script>
+    function goBackOrHome() {
+      if (document.referrer && window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+
+      window.location.href = "{% url 'index' %}";
+    }
+  </script>
 </body>
 </html>

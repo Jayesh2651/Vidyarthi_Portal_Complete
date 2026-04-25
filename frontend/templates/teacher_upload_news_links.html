@@ -24,7 +24,7 @@
   <style>
     body {
       font-family: 'Inter', sans-serif;
-      background-image: url("{% static 'image/pexels-bri-schneiter-28802-346529.jpg' %}");
+      background-image: url("{% static 'image/university.jpg' %}");
       background-size: cover;
       background-repeat: no-repeat;
       background-position: center;
@@ -55,12 +55,14 @@
 
 <body class="text-white min-h-screen relative">
 
-  <!-- Transparent Header -->
-  <header class="bg-glass text-white p-4 shadow-md sticky top-0 z-50">
-    <div class="container mx-auto flex justify-between items-center">
-      <a href="{% url 'dashboard' %}" class="text-2xl font-bold hover:underline">📊 Dashboard</a>
-    </div>
-  </header>
+  <button
+    type="button"
+    onclick="goBackOrDashboard()"
+    class="fixed left-4 top-4 z-50 inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-md transition duration-300 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/70 sm:left-6 sm:top-6"
+  >
+    <span aria-hidden="true">&larr;</span>
+    Back
+  </button>
 
   <!-- Main Section -->
   <main class="max-w-4xl mx-auto px-4 py-10 relative z-10">
@@ -120,5 +122,15 @@
   <footer class="mt-10 py-6 text-center text-sm text-white bg-glass">
     © 2025 Vidyarthi Mitra | Developed with ❤️ by Team
   </footer>
+  <script>
+    function goBackOrDashboard() {
+      if (document.referrer && window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+
+      window.location.href = "{% url 'dashboard' %}";
+    }
+  </script>
 </body>
 </html>

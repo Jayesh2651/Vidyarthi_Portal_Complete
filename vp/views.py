@@ -4,19 +4,19 @@ from django.contrib.auth import authenticate, login
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from .models import Syllabus
-from .forms import SyllabusUploadForm
+# from .forms import SyllabusUploadForm
 from .models import UnitTestUpload
 from .forms import NewsEventForm, ImportantLinkForm
 from .models import NewsEvent, ImportantLink
 from .forms import QuestionPaperForm
 from .models import QuestionPaper
-from .forms import TeacherCreateTestForm
+# from .forms import TeacherCreateTestForm
 from django.http import HttpResponse
-import tempfile
-import subprocess
-import os
-from pylatex import Document, NoEscape
-from django.template.loader import render_to_string
+# import tempfile
+# import subprocess
+# import os
+# from pylatex import Document, NoEscape
+# from django.template.loader import render_to_string
 import pdfkit
 from django.views.decorators.csrf import csrf_exempt
 import platform
