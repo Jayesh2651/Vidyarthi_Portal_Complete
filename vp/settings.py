@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -41,8 +42,8 @@ load_env_file(BASE_DIR / ".env")
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-7fv0y=$x6e5b&bhg3r(0f9y=633v#otltjgkbuw@6)jmx2(d4c')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
-
+# DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
+DEBUG=False
 ALLOWED_HOSTS = ['vidyarthi-portal.onrender.com', 'localhost', '127.0.0.1', 'testserver']
 
 
@@ -97,11 +98,14 @@ WSGI_APPLICATION = 'vp.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.parse(os.environ.get("postgresql://neondb_owner:npg_rfAHC35PMyIk@ep-nameless-unit-an4occ3h-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"))
 }
 
 
