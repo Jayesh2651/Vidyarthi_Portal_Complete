@@ -1,4 +1,3 @@
-#from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
 
@@ -26,12 +25,16 @@ SEMESTER_CHOICES = [
 ]
 
 class Assignment(models.Model):
+    CLASS_CHOICES = CLASS_CHOICES
+    YEAR_CHOICES = YEAR_CHOICES
+    SEMESTER_CHOICES = SEMESTER_CHOICES
+
     class_name = models.CharField(max_length=10, choices=CLASS_CHOICES)
     year = models.CharField(max_length=10, choices=YEAR_CHOICES)
     semester = models.CharField(max_length=10, choices=SEMESTER_CHOICES,default='sem1')
     subject = models.CharField(max_length=100,default='Unknown')
-    theory_pdf = models.FileField(upload_to='assignments/theory/')
-    practical_pdf = models.FileField(upload_to='assignments/practical/')
+    theory_pdf = models.FileField(upload_to='assignments/theory/', blank=True)
+    practical_pdf = models.FileField(upload_to='assignments/practical/', blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -81,11 +84,11 @@ class UnitTestUpload(models.Model):
 
     class_name = models.CharField(max_length=10, choices=CLASS_CHOICES)
     year = models.CharField(max_length=4, choices=YEAR_CHOICES)
-    semester = models.CharField(max_length=10, default='First Semester')
+    semester = models.CharField(max_length=10, choices=SEM_CHOICES, default='sem1')
     subject = models.CharField(max_length=100,default="Maths")
 
-    theory_pdf = models.FileField(upload_to='unit_tests/theory/')
-    practical_pdf = models.FileField(upload_to='unit_tests/practical/')
+    theory_pdf = models.FileField(upload_to='unit_tests/theory/', blank=True)
+    practical_pdf = models.FileField(upload_to='unit_tests/practical/', blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 

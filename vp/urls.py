@@ -1,34 +1,29 @@
-from django.contrib import admin
-from django.urls import path
-from . import views
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib import admin
+from django.urls import path, re_path
+
+from . import views
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('', views.index, name='index'),
-
-    # Custom login and dashboard
-    path('login/', views.custom_login, name='login'),
-    path('dashboard/', views.dashboard, name='dashboard'),
-
-    # Upload pages
-    path('upload-assignment/', views.upload_assignment, name='upload_assignment'),
-    path('upload_news_links/', views.upload_news_links, name='upload_news_links'),
-    path('upload_question_paper/', views.upload_question_paper, name='upload_question_paper'),
-    path('upload_syllabus/', views.upload_syllabus, name='upload_syllabus'),
-    path('upload_unit_test/', views.upload_unit_test, name='upload_unit_test'),
-    path('create_unit_test/', views.teacher_create_test, name='teacher_create_test'),
-    path('download-pdf/', views.download_pdf, name='download_pdf'),
-
-    # Student facing pages
-    path('course/', views.course, name='course'),
-    path('home_assignments/', views.home_assignments, name='home_assignments'),
-    path('news_events/', views.news_events, name='news_events'),
-    path('practicals/', views.practicals, name='practicals'),
-    path('question_papers/', views.question_papers, name='question_papers'),
-    path('syllabus/', views.syllabus, name='syllabus'),
-    path('unit_tests/', views.unit_tests, name='unit_tests'),
+    path("admin/", admin.site.urls),
+    path("api/auth/csrf/", views.csrf_cookie, name="api_csrf"),
+    path("api/auth/login/", views.login_view, name="api_login"),
+    path("api/auth/logout/", views.logout_view, name="api_logout"),
+    path("api/auth/session/", views.session_view, name="api_session"),
+    path("api/ai/chat/", views.ai_chat_view, name="api_ai_chat"),
+    path("api/options/", views.portal_options, name="api_options"),
+    path("api/home/", views.home_view, name="api_home"),
+    path("api/dashboard/summary/", views.dashboard_summary, name="api_dashboard_summary"),
+    path("api/assignments/", views.assignments_view, name="api_assignments"),
+    path("api/syllabus/", views.syllabus_view, name="api_syllabus"),
+    path("api/unit-tests/", views.unit_tests_view, name="api_unit_tests"),
+    path("api/question-papers/", views.question_papers_view, name="api_question_papers"),
+    path("api/news-links/", views.news_links_view, name="api_news_links"),
+    path("api/download-pdf/", views.download_pdf, name="api_download_pdf"),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+urlpatterns += [
+    re_path(r"^(?!api/|admin/|media/|static/).*$", views.serve_spa, name="spa"),
+]

@@ -1,346 +1,531 @@
-from django.shortcuts import render, redirect
-from .forms import AssignmentUploadForm,Assignment
-from django.contrib.auth import authenticate, login
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from .models import Syllabus
-# from .forms import SyllabusUploadForm
-from .models import UnitTestUpload
-from .forms import NewsEventForm, ImportantLinkForm
-from .models import NewsEvent, ImportantLink
-from .forms import QuestionPaperForm
-from .models import QuestionPaper
-# from .forms import TeacherCreateTestForm
-from django.http import HttpResponse
-# import tempfile
-# import subprocess
-# import os
-# from pylatex import Document, NoEscape
-# from django.template.loader import render_to_string
-import pdfkit
-from django.views.decorators.csrf import csrf_exempt
 import platform
+import re
+from pathlib import Path
+
+import pdfkit
+from django.conf import settings
+from django.contrib.auth import authenticate, login, logout
+from django.http import HttpResponse
+from django.views.decorators.csrf import ensure_csrf_cookie
+from rest_framework import status
+from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+
+from .ai import (
+    AssistantConfigurationError,
+    AssistantRuntimeError,
+    build_assistant_reply,
+    invalidate_assistant_cache,
+)
+from .models import Assignment, ImportantLink, NewsEvent, QuestionPaper, Syllabus, UnitTestUpload
+from .serializers import (
+    AssignmentSerializer,
+    ImportantLinkSerializer,
+    NewsEventSerializer,
+    NewsLinksSubmissionSerializer,
+    QuestionPaperSerializer,
+    SyllabusSerializer,
+    UnitTestSerializer,
+)
 
 
-# for admin panel 
-# def home(request):
-#     return render(request, 'templates/index.html') 
-
-def custom_login(request):
-    if request.method == 'POST':
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        user = authenticate(request, username=username, password=password)  # not email, use username here
-        if user is not None:
-            login(request, user)
-            return redirect('dashboard')
-        else:
-            messages.error(request, 'Invalid username or password')
-    return render(request, 'templates/teacher_login.html')
-
-@login_required(login_url='/templates/teacher_login/')  # हा ठीक आहे, कारण custom_login आहे
-def dashboard(request):
-    return render(request, 'templates/teacher_dashboard.html')
+FRONTEND_DIST_INDEX = Path(settings.BASE_DIR) / "frontend" / "dist" / "index.html"
 
 
-def upload_assignment(request):
-    success_message = None
-
-    if request.method == 'POST':
-        class_name = request.POST['class_name']
-        year = request.POST['year']
-        semester = request.POST['semester']
-        subject = request.POST['subject']
-        theory_pdf = request.FILES.get('theory_pdf')
-        practical_pdf = request.FILES.get('practical_pdf')
-
-        Assignment.objects.create(
-            class_name=class_name,
-            year=year,
-            semester=semester,
-            subject=subject,
-            theory_pdf=theory_pdf,
-            practical_pdf=practical_pdf
-        )
-
-        success_message = "Assignment uploaded successfully ✅"
-
-    return render(request, 'templates/teacher_upload_assignment.html', {'success_message': success_message})
-
-def upload_news_links(request):
-    if request.method == 'POST':
-        news_form = NewsEventForm(request.POST, request.FILES)
-        link_form = ImportantLinkForm(request.POST)
-
-        if news_form.is_valid():
-            news_form.save()
-            messages.success(request, "✅ ")
-
-        if link_form.is_valid() and link_form.cleaned_data.get("link_title"):
-            link_form.save()
-            messages.success(request, "uploaded successfully!")
-
-        return redirect('upload_news_links')  # Change name as per url name
-    else:
-        news_form = NewsEventForm()
-        link_form = ImportantLinkForm()
-
-    return render(request, 'templates/teacher_upload_news_links.html', {
-        'news_form': news_form,
-        'link_form': link_form,
-    })
-
-def upload_question_paper(request):
-    if request.method == 'POST':
-        form = QuestionPaperForm(request.POST, request.FILES)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "✅ Question paper uploaded successfully!")
-            return redirect('upload_question_paper')
-        else:
-            print(form.errors)
-            messages.error(request, "❌ Something went wrong.")
-    else:
-        form = QuestionPaperForm()
-    return render(request, 'templates/teacher_upload_question_paper.html', {'form': form})
-
-def upload_syllabus(request):
-    if request.method == 'POST':
-        title = request.POST.get('title')
-        class_name = request.POST.get('class')
-        subject = request.POST.get('subject')
-        year = request.POST.get('year')
-        file = request.FILES.get('file')
-
-        if title and class_name and subject and year and file:
-            Syllabus.objects.create(
-                title=title,
-                class_name=class_name,
-                subject=subject,
-                year=year,
-                file=file
-            )
-            messages.success(request, "✅ Syllabus uploaded successfully!")  # ✅ ADD THIS LINE
-            return redirect('upload_syllabus')  # same page reload
-
-    return render(request, 'templates/teacher_upload_syllabus.html')
+def get_choice_payload(choices):
+    return [{"value": value, "label": label} for value, label in choices]
 
 
-# wkhtmltopdf चा path set कर
-# path_wkhtmltopdf = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'  # Make sure 'bin' path is added
-# config = pdfkit.configuration(wkhtmltopdf='/usr/bin/wkhtmltopdf')
-if platform.system() == "Windows":
-    path_wkhtmltopdf = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
-else:
-    path_wkhtmltopdf = '/usr/bin/wkhtmltopdf'
-config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
-pdfkit.from_string("Hello World", "out.pdf", configuration=config)
+def build_pdf_configuration():
+    wkhtmltopdf_path = (
+        Path(r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
+        if platform.system() == "Windows"
+        else Path("/usr/bin/wkhtmltopdf")
+    )
 
-@csrf_exempt
-def download_pdf(request):
-    if request.method == 'POST':
-        html_content = request.POST.get('content')
+    if not wkhtmltopdf_path.exists():
+        raise FileNotFoundError(f"wkhtmltopdf was not found at {wkhtmltopdf_path}")
 
-        if not html_content:
-            return HttpResponse("No content received", status=400)
+    return pdfkit.configuration(wkhtmltopdf=str(wkhtmltopdf_path))
 
-        options = {
-            'encoding': 'UTF-8',
-            'enable-local-file-access': ''
+
+@ensure_csrf_cookie
+def serve_spa(request):
+    if FRONTEND_DIST_INDEX.exists():
+        return HttpResponse(FRONTEND_DIST_INDEX.read_text(encoding="utf-8"))
+
+    return HttpResponse(
+        "React frontend has not been built yet. Run `npm install` and `npm run build` inside `frontend/`.",
+        status=503,
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@ensure_csrf_cookie
+def csrf_cookie(request):
+    return Response({"detail": "CSRF cookie set."})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def portal_options(request):
+    return Response(
+        {
+            "assignment_classes": get_choice_payload(Assignment.CLASS_CHOICES),
+            "assignment_years": get_choice_payload(Assignment.YEAR_CHOICES),
+            "assignment_semesters": get_choice_payload(Assignment.SEMESTER_CHOICES),
+            "syllabus_classes": get_choice_payload(Syllabus.CLASS_CHOICES),
+            "syllabus_years": get_choice_payload(Syllabus.YEAR_CHOICES),
+            "unit_test_classes": get_choice_payload(UnitTestUpload.CLASS_CHOICES),
+            "unit_test_years": get_choice_payload(UnitTestUpload.YEAR_CHOICES),
+            "unit_test_semesters": get_choice_payload(UnitTestUpload.SEM_CHOICES),
+            "question_paper_classes": get_choice_payload(QuestionPaper.CLASS_CHOICES),
+            "question_paper_exams": get_choice_payload(QuestionPaper.EXAM_CHOICES),
         }
-
-        try:
-            pdf = pdfkit.from_string(html_content, False, options=options, configuration=config)
-        except Exception as e:
-            return HttpResponse(f"PDF generation failed: {str(e)}", status=500)
-
-        response = HttpResponse(pdf, content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="question_paper.pdf"'
-        return response
-
-    return HttpResponse("Invalid request method", status=405)
-# for student 
-def index(request):
-    news_events = NewsEvent.objects.all().order_by('-news_date')[:5]  # Show latest 5
-    links = ImportantLink.objects.all()
-    return render(request, 'templates/index.html', {
-        'news_events': news_events,
-        'links': links,
-    })
-
-def course(request):
-    return render(request, 'templates/course.html')
-
-# vp/views.py
-
-def home_assignments(request):
-    class_selected = request.GET.get('class')
-    year_selected = request.GET.get('year')
-    semester_selected = request.GET.get('semester')
-    subject_selected = request.GET.get('subject')
-
-    years = Assignment.objects.values_list('year', flat=True).distinct().order_by('-year')
-    semesters = Assignment.objects.values_list('semester', flat=True).distinct()
-    subjects = Assignment.objects.values_list('subject', flat=True).distinct()
-
-    latest_year = years[0] if years else None
-
-    assignments = Assignment.objects.all()
-
-    # Prepare filtered queryset
-    assignments_filtered = assignments
-    if class_selected:
-        assignments_filtered = assignments_filtered.filter(class_name=class_selected)
-    if year_selected:
-        assignments_filtered = assignments_filtered.filter(year=year_selected)
-    if semester_selected:
-        assignments_filtered = assignments_filtered.filter(semester=semester_selected)
-    if subject_selected:
-        assignments_filtered = assignments_filtered.filter(subject=subject_selected)
-
-    # Latest year assignments (if no filter is applied)
-    assignments_latest_year = None
-    if not any([class_selected, year_selected, semester_selected, subject_selected]) and latest_year:
-        assignments_latest_year = assignments.filter(year=latest_year)
-
-    latest_assignment = assignments_filtered.order_by('-uploaded_at').first()
-
-    return render(request, 'templates/home_assignments.html', {
-        'assignments': assignments_filtered,
-        'assignments_latest_year': assignments_latest_year,
-        'selected_class': class_selected,
-        'selected_year': year_selected,
-        'selected_semester': semester_selected,
-        'selected_subject': subject_selected,
-        'years': years,
-        'semesters': semesters,
-        'subjects': subjects,
-        'latest_assignment': latest_assignment,
-        'latest_year': latest_year,
-    })
+    )
 
 
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@parser_classes([JSONParser])
+def login_view(request):
+    username = request.data.get("username", "").strip()
+    password = request.data.get("password", "")
 
-def news_events(request):
-    news_events = NewsEvent.objects.all().order_by('-news_date')
-    links = ImportantLink.objects.all()
-    return render(request, 'templates/news_events.html', {
-        'news_events': news_events,
-        'links': links
-    })
-
-def practicals(request):
-    return render(request, 'templates/practicals.html')
-
-def question_papers(request):
-    class_filter = request.GET.get('class')
-    exam_filter = request.GET.get('exam')
-    year_filter = request.GET.get('year')
-
-    papers = QuestionPaper.objects.all()
-
-    # ✅ Correct regex: r'(20\d{2})' instead of r'(20\\d{2})'
-    import re
-    years = set()
-    for paper in papers:
-        match = re.search(r'(20\d{2})', paper.exam)
-        if match:
-            years.add(match.group(1))
-    years = sorted(years, reverse=True)
-
-    if class_filter:
-        papers = papers.filter(class_name=class_filter)
-    if exam_filter:
-        papers = papers.filter(exam=exam_filter)
-    if year_filter:
-        papers = papers.filter(exam__icontains=year_filter)
-
-    context = {
-        'papers': papers,
-        'years': years,
-        'selected_year': year_filter,
-    }
-    return render(request, 'templates/question_papers.html', context)  # Removed 'templates/' prefix here
-
-
-def syllabus(request):
-    syllabi = Syllabus.objects.all().order_by('-uploaded_at')
-    return render(request, 'templates/syllabus.html', {'syllabi': syllabi})
-
-def unit_tests(request):
-    unit_tests_filtered = []
-    unit_tests_latest_year = []
-    selected_year = request.GET.get('year')
-    selected_class = request.GET.get('class')
-    selected_semester = request.GET.get('semester')
-    selected_subject = request.GET.get('subject')
-
-    years = UnitTestUpload.objects.values_list('year', flat=True).distinct().order_by('-year')
-    latest_year = years[0] if years else None
-
-    # Default: show all unit tests from the latest year
-    if not selected_year:
-        selected_year = latest_year
-        unit_tests_latest_year = UnitTestUpload.objects.filter(year=latest_year)
-
-    # If filters are applied: fetch matching unit tests
-    if selected_year and selected_class and selected_semester and selected_subject:
-        unit_tests_filtered = UnitTestUpload.objects.filter(
-            year=selected_year,
-            class_name=selected_class,
-            semester=selected_semester,
-            subject__iexact=selected_subject
+    user = authenticate(request, username=username, password=password)
+    if not user:
+        return Response(
+            {"message": "Invalid username or password."},
+            status=status.HTTP_401_UNAUTHORIZED,
         )
 
-    return render(request, 'templates/unit_tests.html', {
-        'unit_tests_filtered': unit_tests_filtered,
-        'unit_tests_latest_year': unit_tests_latest_year,
-        'selected_year': selected_year,
-        'selected_class': selected_class,
-        'selected_semester': selected_semester,
-        'selected_subject': selected_subject,
-        'years': years,
-        'latest_year': latest_year,
-    })
+    login(request, user)
+    return Response(
+        {
+            "message": "Login successful.",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "full_name": user.get_full_name(),
+            },
+        }
+    )
 
 
-def upload_unit_test(request):
-    latest_unit_test = UnitTestUpload.objects.order_by('-id').first()
-    queryset = UnitTestUpload.objects.all()
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def logout_view(request):
+    logout(request)
+    return Response({"message": "Logged out successfully."})
 
-    if request.method == 'POST':
-        class_name = request.POST.get('class')
-        year = request.POST.get('year')
-        semester = request.POST.get('semester')
-        subject = request.POST.get('subject')
-        theory_pdf = request.FILES.get('theory_pdf')
-        practical_pdf = request.FILES.get('practical_pdf')
 
-        # Upload new file
-        if class_name and year and semester and subject and theory_pdf and practical_pdf:
-            UnitTestUpload.objects.create(
-                class_name=class_name,
-                year=year,
-                semester=semester,
-                subject=subject,
-                theory_pdf=theory_pdf,
-                practical_pdf=practical_pdf
-            )
-            messages.success(request, "✅ Unit Test uploaded successfully.")
-            return redirect('upload_unit_test')
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def session_view(request):
+    if not request.user.is_authenticated:
+        return Response({"authenticated": False, "user": None})
 
-        # Search filters
-        if class_name or year:
-            if class_name:
-                queryset = queryset.filter(class_name=class_name)
-            if year:
-                queryset = queryset.filter(year=year)
+    return Response(
+        {
+            "authenticated": True,
+            "user": {
+                "id": request.user.id,
+                "username": request.user.username,
+                "full_name": request.user.get_full_name(),
+            },
+        }
+    )
 
-    context = {
-        'latest_unit_test': latest_unit_test,
-        'unit_tests': queryset
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def home_view(request):
+    news_events = NewsEvent.objects.all().order_by("-news_date", "-id")[:5]
+    links = ImportantLink.objects.all().order_by("link_title")
+
+    return Response(
+        {
+            "news_events": NewsEventSerializer(
+                news_events,
+                many=True,
+                context={"request": request},
+            ).data,
+            "important_links": ImportantLinkSerializer(links, many=True).data,
+        }
+    )
+
+
+@api_view(["GET", "POST"])
+@permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser])
+def assignments_view(request):
+    if request.method == "GET":
+        assignments = Assignment.objects.all().order_by("-uploaded_at")
+        class_name = request.query_params.get("class_name")
+        year = request.query_params.get("year")
+        semester = request.query_params.get("semester")
+        subject = request.query_params.get("subject")
+
+        if class_name:
+            assignments = assignments.filter(class_name=class_name)
+        if year:
+            assignments = assignments.filter(year=year)
+        if semester:
+            assignments = assignments.filter(semester=semester)
+        if subject:
+            assignments = assignments.filter(subject__icontains=subject.strip())
+
+        latest_year = (
+            Assignment.objects.values_list("year", flat=True).distinct().order_by("-year").first()
+        )
+        latest_assignment = assignments.first()
+
+        return Response(
+            {
+                "latest_year": latest_year,
+                "latest_assignment": AssignmentSerializer(
+                    latest_assignment,
+                    context={"request": request},
+                ).data
+                if latest_assignment
+                else None,
+                "options": {
+                    "years": sorted(
+                        Assignment.objects.values_list("year", flat=True).distinct(),
+                        reverse=True,
+                    ),
+                    "semesters": sorted(
+                        Assignment.objects.values_list("semester", flat=True).distinct()
+                    ),
+                    "subjects": sorted(
+                        Assignment.objects.values_list("subject", flat=True).distinct()
+                    ),
+                },
+                "items": AssignmentSerializer(
+                    assignments,
+                    many=True,
+                    context={"request": request},
+                ).data,
+            }
+        )
+
+    if not request.user.is_authenticated:
+        return Response(
+            {"message": "Authentication required."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    serializer = AssignmentSerializer(data=request.data, context={"request": request})
+    serializer.is_valid(raise_exception=True)
+    assignment = serializer.save()
+    invalidate_assistant_cache()
+
+    return Response(
+        {
+            "message": "Assignment uploaded successfully.",
+            "item": AssignmentSerializer(assignment, context={"request": request}).data,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET", "POST"])
+@permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser])
+def syllabus_view(request):
+    if request.method == "GET":
+        syllabi = Syllabus.objects.all().order_by("-uploaded_at")
+        return Response(
+            {"items": SyllabusSerializer(syllabi, many=True, context={"request": request}).data}
+        )
+
+    if not request.user.is_authenticated:
+        return Response(
+            {"message": "Authentication required."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    serializer = SyllabusSerializer(data=request.data, context={"request": request})
+    serializer.is_valid(raise_exception=True)
+    syllabus = serializer.save()
+    invalidate_assistant_cache()
+
+    return Response(
+        {
+            "message": "Syllabus uploaded successfully.",
+            "item": SyllabusSerializer(syllabus, context={"request": request}).data,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET", "POST"])
+@permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser])
+def unit_tests_view(request):
+    if request.method == "GET":
+        unit_tests = UnitTestUpload.objects.all().order_by("-uploaded_at")
+        class_name = request.query_params.get("class_name")
+        year = request.query_params.get("year")
+        semester = request.query_params.get("semester")
+        subject = request.query_params.get("subject")
+
+        if class_name:
+            unit_tests = unit_tests.filter(class_name=class_name)
+        if year:
+            unit_tests = unit_tests.filter(year=year)
+        if semester:
+            unit_tests = unit_tests.filter(semester=semester)
+        if subject:
+            unit_tests = unit_tests.filter(subject__icontains=subject.strip())
+
+        latest_year = (
+            UnitTestUpload.objects.values_list("year", flat=True).distinct().order_by("-year").first()
+        )
+        if not any([class_name, year, semester, subject]) and latest_year:
+            unit_tests = unit_tests.filter(year=latest_year)
+
+        return Response(
+            {
+                "latest_year": latest_year,
+                "options": {
+                    "years": sorted(
+                        UnitTestUpload.objects.values_list("year", flat=True).distinct(),
+                        reverse=True,
+                    ),
+                    "subjects": sorted(
+                        UnitTestUpload.objects.values_list("subject", flat=True).distinct()
+                    ),
+                },
+                "items": UnitTestSerializer(
+                    unit_tests,
+                    many=True,
+                    context={"request": request},
+                ).data,
+            }
+        )
+
+    if not request.user.is_authenticated:
+        return Response(
+            {"message": "Authentication required."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    serializer = UnitTestSerializer(data=request.data, context={"request": request})
+    serializer.is_valid(raise_exception=True)
+    unit_test = serializer.save()
+    invalidate_assistant_cache()
+
+    return Response(
+        {
+            "message": "Unit test uploaded successfully.",
+            "item": UnitTestSerializer(unit_test, context={"request": request}).data,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET", "POST"])
+@permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser])
+def question_papers_view(request):
+    if request.method == "GET":
+        papers = QuestionPaper.objects.all().order_by("-upload_date", "-uploaded_at")
+        class_name = request.query_params.get("class_name")
+        exam = request.query_params.get("exam")
+        year = request.query_params.get("year")
+
+        if class_name:
+            papers = papers.filter(class_name=class_name)
+        if exam:
+            papers = papers.filter(exam=exam)
+        if year:
+            papers = papers.filter(exam__icontains=year)
+
+        years = set()
+        for paper in QuestionPaper.objects.all():
+            match = re.search(r"(20\d{2})", paper.exam)
+            if match:
+                years.add(match.group(1))
+
+        return Response(
+            {
+                "years": sorted(years, reverse=True),
+                "items": QuestionPaperSerializer(
+                    papers,
+                    many=True,
+                    context={"request": request},
+                ).data,
+            }
+        )
+
+    if not request.user.is_authenticated:
+        return Response(
+            {"message": "Authentication required."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    serializer = QuestionPaperSerializer(data=request.data, context={"request": request})
+    serializer.is_valid(raise_exception=True)
+    paper = serializer.save()
+    invalidate_assistant_cache()
+
+    return Response(
+        {
+            "message": "Question paper uploaded successfully.",
+            "item": QuestionPaperSerializer(paper, context={"request": request}).data,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def news_links_view(request):
+    serializer = NewsLinksSubmissionSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    created = serializer.save()
+    invalidate_assistant_cache()
+
+    payload = {"message": "Content uploaded successfully."}
+    if "news_event" in created:
+        payload["news_event"] = NewsEventSerializer(
+            created["news_event"],
+            context={"request": request},
+        ).data
+    if "important_link" in created:
+        payload["important_link"] = ImportantLinkSerializer(created["important_link"]).data
+
+    return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@parser_classes([JSONParser])
+def ai_chat_view(request):
+    message = (request.data.get("message") or "").strip()
+    if not message:
+        return Response(
+            {"message": "Message is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    history = request.data.get("history") or []
+    if not isinstance(history, list):
+        history = []
+
+    try:
+        payload = build_assistant_reply(
+            message=message,
+            history=history,
+            mode=(request.data.get("mode") or "default").strip().lower(),
+            page_path=(request.data.get("page_path") or "").strip(),
+            page_title=(request.data.get("page_title") or "").strip(),
+        )
+    except AssistantConfigurationError as error:
+        return Response(
+            {"message": str(error)},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except AssistantRuntimeError as error:
+        return Response(
+            {"message": str(error)},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    return Response(payload)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def dashboard_summary(request):
+    latest_items = {
+        "assignment": Assignment.objects.order_by("-uploaded_at").first(),
+        "syllabus": Syllabus.objects.order_by("-uploaded_at").first(),
+        "unit_test": UnitTestUpload.objects.order_by("-uploaded_at").first(),
+        "question_paper": QuestionPaper.objects.order_by("-uploaded_at").first(),
+        "news_event": NewsEvent.objects.order_by("-news_date", "-id").first(),
     }
-    return render(request, 'templates/teacher_upload_unit_test.html', context)
 
-def teacher_create_test(request):
-    return render(request,'templates/teacher_create_test.html')
+    return Response(
+        {
+            "counts": {
+                "assignments": Assignment.objects.count(),
+                "syllabi": Syllabus.objects.count(),
+                "unit_tests": UnitTestUpload.objects.count(),
+                "question_papers": QuestionPaper.objects.count(),
+                "news_events": NewsEvent.objects.count(),
+                "important_links": ImportantLink.objects.count(),
+            },
+            "latest": {
+                "assignment": AssignmentSerializer(
+                    latest_items["assignment"],
+                    context={"request": request},
+                ).data
+                if latest_items["assignment"]
+                else None,
+                "syllabus": SyllabusSerializer(
+                    latest_items["syllabus"],
+                    context={"request": request},
+                ).data
+                if latest_items["syllabus"]
+                else None,
+                "unit_test": UnitTestSerializer(
+                    latest_items["unit_test"],
+                    context={"request": request},
+                ).data
+                if latest_items["unit_test"]
+                else None,
+                "question_paper": QuestionPaperSerializer(
+                    latest_items["question_paper"],
+                    context={"request": request},
+                ).data
+                if latest_items["question_paper"]
+                else None,
+                "news_event": NewsEventSerializer(
+                    latest_items["news_event"],
+                    context={"request": request},
+                ).data
+                if latest_items["news_event"]
+                else None,
+            },
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser, FormParser])
+def download_pdf(request):
+    html_content = request.data.get("content")
+    if not html_content:
+        return Response(
+            {"message": "No content received."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    options = {
+        "encoding": "UTF-8",
+        "enable-local-file-access": "",
+    }
+
+    try:
+        pdf = pdfkit.from_string(
+            html_content,
+            False,
+            options=options,
+            configuration=build_pdf_configuration(),
+        )
+    except Exception as error:
+        return Response(
+            {"message": f"PDF generation failed: {error}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = 'attachment; filename="question_paper.pdf"'
+    return response

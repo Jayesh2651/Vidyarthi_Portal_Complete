@@ -1,0 +1,7 @@
+.env
+.env.local
+.ai_store/
+.venv/
+__pycache__/
+*.py[cod]
+frontend/dist/

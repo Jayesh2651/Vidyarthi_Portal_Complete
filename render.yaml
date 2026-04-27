@@ -2,5 +2,5 @@ services:
   - type: web
     name: vidyarthi-portal
     env: python
-    buildCommand: ./build.sh && pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && ./build.sh
     startCommand: gunicorn vp.wsgi:application

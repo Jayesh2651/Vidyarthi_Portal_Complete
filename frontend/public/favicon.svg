@@ -1,0 +1,26 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fav-primary" x1="12" y1="10" x2="50" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B5FFF" />
+      <stop offset="0.55" stop-color="#3959FF" />
+      <stop offset="1" stop-color="#7A3CFF" />
+    </linearGradient>
+    <linearGradient id="fav-left" x1="10" y1="15" x2="31" y2="49" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1A7BFF" />
+      <stop offset="1" stop-color="#0F2F92" />
+    </linearGradient>
+    <linearGradient id="fav-right" x1="33" y1="15" x2="54" y2="49" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6C6BFF" />
+      <stop offset="1" stop-color="#5420D9" />
+    </linearGradient>
+    <linearGradient id="fav-accent" x1="25" y1="12" x2="42" y2="23" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD36A" />
+      <stop offset="1" stop-color="#FF8C42" />
+    </linearGradient>
+  </defs>
+
+  <path d="M10 19C15.3 14.6 22.1 13.2 29 15.4V49.2C22.8 47 16.2 47.3 10 50.2V19Z" fill="url(#fav-left)" />
+  <path d="M54 19C48.7 14.6 41.9 13.2 35 15.4V49.2C41.2 47 47.8 47.3 54 50.2V19Z" fill="url(#fav-right)" />
+  <path d="M16 42V25L24 33L32 23L40 33L48 25V42" stroke="url(#fav-primary)" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M24 18L32 13.6L40 18L32 22.2L24 18Z" fill="url(#fav-accent)" />
+</svg>

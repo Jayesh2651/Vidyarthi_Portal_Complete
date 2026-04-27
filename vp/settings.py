@@ -17,17 +17,33 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def load_env_file(env_path):
+    if not env_path.exists():
+        return
+
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+
+        key, value = stripped.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip("'").strip('"'))
+
+
+load_env_file(BASE_DIR / ".env")
+
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-7fv0y=$x6e5b&bhg3r(0f9y=633v#otltjgkbuw@6)jmx2(d4c'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-7fv0y=$x6e5b&bhg3r(0f9y=633v#otltjgkbuw@6)jmx2(d4c')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = ['vidyarthi-portal.onrender.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['vidyarthi-portal.onrender.com', 'localhost', '127.0.0.1', 'testserver']
 
 
 
@@ -41,18 +57,21 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
+    'rest_framework',
     'vp',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
@@ -61,7 +80,7 @@ ROOT_URLCONF = 'vp.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / "frontend"],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -72,11 +91,6 @@ TEMPLATES = [
         },
     },
 ]
-# AUTHENTICATION_BACKENDS = [
-#     'vp.backends.EmailBackend',  # Replace 'vp' with your app name
-#     'django.contrib.auth.backends.ModelBackend',
-# ]
-
 WSGI_APPLICATION = 'vp.wsgi.application'
 
 
@@ -127,18 +141,38 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
+FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-STATICFILES_DIRS = [
-    BASE_DIR / "frontend" / "static",
+STATICFILES_DIRS = [path for path in [FRONTEND_ASSETS_DIR] if path.exists()]
+
+
+LOGIN_REDIRECT_URL = '/dashboard'
+LOGIN_URL = '/login'
+LOGOUT_REDIRECT_URL = '/login'
+
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
+CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
 ]
 
-
-LOGIN_REDIRECT_URL = '/templates/dashboard/'
-LOGIN_URL = '/templates/login/'
-LOGOUT_REDIRECT_URL = 'login'
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+}
 
 
 # Default primary key field type
