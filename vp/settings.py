@@ -44,7 +44,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-7fv0y=$x6e5b&bhg3r(
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
 DEBUG=False
-ALLOWED_HOSTS = ['vidyarthi-portal.onrender.com', 'localhost', '127.0.0.1', 'testserver']
+ALLOWED_HOSTS = ['https://vidyarthi-portal-complete-1.onrender.com']
 
 
 
