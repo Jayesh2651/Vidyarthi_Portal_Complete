@@ -2,7 +2,9 @@ import platform
 import re
 from pathlib import Path
 
-import pdfkit
+from reportlab.pdfgen import canvas
+from io import BytesIO
+# import pdfkit
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.http import HttpResponse
@@ -38,17 +40,17 @@ def get_choice_payload(choices):
     return [{"value": value, "label": label} for value, label in choices]
 
 
-def build_pdf_configuration():
-    wkhtmltopdf_path = (
-        Path(r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
-        if platform.system() == "Windows"
-        else Path("/usr/bin/wkhtmltopdf")
-    )
+# def build_pdf_configuration():
+#     wkhtmltopdf_path = (
+#         Path(r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
+#         if platform.system() == "Windows"
+#         else Path("/usr/bin/wkhtmltopdf")
+#     )
 
-    if not wkhtmltopdf_path.exists():
-        raise FileNotFoundError(f"wkhtmltopdf was not found at {wkhtmltopdf_path}")
+#     if not wkhtmltopdf_path.exists():
+#         raise FileNotFoundError(f"wkhtmltopdf was not found at {wkhtmltopdf_path}")
 
-    return pdfkit.configuration(wkhtmltopdf=str(wkhtmltopdf_path))
+#     return pdfkit.configuration(wkhtmltopdf=str(wkhtmltopdf_path))
 
 
 @ensure_csrf_cookie
@@ -501,31 +503,34 @@ def dashboard_summary(request):
 @permission_classes([IsAuthenticated])
 @parser_classes([JSONParser, FormParser])
 def download_pdf(request):
-    html_content = request.data.get("content")
-    if not html_content:
+    content = request.data.get("content")
+
+    if not content:
         return Response(
             {"message": "No content received."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    options = {
-        "encoding": "UTF-8",
-        "enable-local-file-access": "",
-    }
-
     try:
-        pdf = pdfkit.from_string(
-            html_content,
-            False,
-            options=options,
-            configuration=build_pdf_configuration(),
-        )
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer)
+
+        # Simple text rendering (you can improve later)
+        y = 800
+        for line in content.split("\n"):
+            p.drawString(50, y, line[:100])  # prevent overflow
+            y -= 20
+
+        p.save()
+        buffer.seek(0)
+
+        response = HttpResponse(buffer, content_type="application/pdf")
+        response["Content-Disposition"] = 'attachment; filename="document.pdf"'
+
+        return response
+
     except Exception as error:
         return Response(
             {"message": f"PDF generation failed: {error}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-
-    response = HttpResponse(pdf, content_type="application/pdf")
-    response["Content-Disposition"] = 'attachment; filename="question_paper.pdf"'
-    return response
