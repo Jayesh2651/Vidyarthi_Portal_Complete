@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Any
 
 from django.conf import settings
 
+from .exceptions import AssistantConfigurationError, AssistantRuntimeError
 from vp.models import Assignment, ImportantLink, NewsEvent, QuestionPaper, Syllabus, UnitTestUpload
 
 try:
@@ -41,6 +43,7 @@ DEFAULT_EMBEDDING_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 SUPPORTED_EXTRA_EXTENSIONS = {".pdf", ".txt", ".md"}
 KNOWLEDGE_BASE_VERSION = "2026-04-26-v2"
+SERVERLESS_VECTOR_STORE_DIR = "vidyarthi-ai-store"
 
 STOPWORDS = {
     "a",
@@ -91,14 +94,6 @@ The assistant should help students understand portal content, find resources, an
 """.strip()
 
 
-class AssistantConfigurationError(Exception):
-    pass
-
-
-class AssistantRuntimeError(Exception):
-    pass
-
-
 @dataclass
 class AssistantChunk:
     chunk_id: str
@@ -140,6 +135,25 @@ def _display_path(file_path: Path) -> str:
         return str(file_path.relative_to(settings.BASE_DIR))
     except ValueError:
         return str(file_path)
+
+
+def _running_in_serverless() -> bool:
+    return any(
+        os.getenv(variable)
+        for variable in ("VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "FUNCTION_TARGET")
+    )
+
+
+def _resolve_index_dir() -> Path:
+    configured_dir = os.getenv("AI_VECTOR_STORE_DIR", "").strip()
+    if configured_dir:
+        candidate = Path(configured_dir)
+        return candidate if candidate.is_absolute() else Path(settings.BASE_DIR) / candidate
+
+    if _running_in_serverless():
+        return Path(tempfile.gettempdir()) / SERVERLESS_VECTOR_STORE_DIR
+
+    return Path(settings.BASE_DIR) / ".ai_store"
 
 
 def _tokenize_for_matching(text: str) -> set[str]:
@@ -268,6 +282,26 @@ def _read_source_file(file_path: Path) -> str:
     if file_path.suffix.lower() == ".pdf":
         return _read_pdf_text(file_path)
     return _read_text_file(file_path)
+
+
+def _resolve_file_field_path(file_field: Any) -> Path | None:
+    if not file_field:
+        return None
+
+    try:
+        return Path(file_field.path)
+    except (AttributeError, NotImplementedError, OSError, ValueError) as error:
+        LOGGER.warning(
+            "Unable to access local file path for %s: %s",
+            getattr(file_field, "name", file_field),
+            error,
+        )
+        return None
+
+
+def _read_file_field(file_field: Any) -> str:
+    file_path = _resolve_file_field_path(file_field)
+    return _read_source_file(file_path) if file_path else ""
 
 
 def _split_text(text: str, chunk_size: int, overlap: int) -> list[str]:
@@ -406,9 +440,7 @@ class ChatClient:
 
 class PortalKnowledgeBase:
     def __init__(self) -> None:
-        self.index_dir = Path(os.getenv("AI_VECTOR_STORE_DIR", settings.BASE_DIR / ".ai_store"))
-        self.index_dir.mkdir(parents=True, exist_ok=True)
-
+        self.index_dir = _resolve_index_dir()
         self.manifest_path = self.index_dir / "manifest.json"
         self.index_path = self.index_dir / "portal.index"
         self.vector_path = self.index_dir / "vectors.npy"
@@ -424,6 +456,8 @@ class PortalKnowledgeBase:
         self._matrix = None
         self._index = None
         self._signature = None
+        self._storage_checked = False
+        self._storage_available = False
 
     def invalidate(self) -> None:
         with self._lock:
@@ -495,7 +529,42 @@ class PortalKnowledgeBase:
 
             self._build_index(signature)
 
+    def _set_index_dir(self, directory: Path) -> None:
+        self.index_dir = directory
+        self.manifest_path = self.index_dir / "manifest.json"
+        self.index_path = self.index_dir / "portal.index"
+        self.vector_path = self.index_dir / "vectors.npy"
+        self.chunk_path = self.index_dir / "chunks.json"
+
+    def _ensure_storage_ready(self) -> bool:
+        if self._storage_checked:
+            return self._storage_available
+
+        fallback_dir = Path(tempfile.gettempdir()) / SERVERLESS_VECTOR_STORE_DIR
+        candidate_dirs = [self.index_dir]
+        if fallback_dir != self.index_dir:
+            candidate_dirs.append(fallback_dir)
+
+        for candidate_dir in candidate_dirs:
+            try:
+                candidate_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                LOGGER.warning("AI cache directory %s is unavailable: %s", candidate_dir, error)
+                continue
+
+            self._set_index_dir(candidate_dir)
+            self._storage_checked = True
+            self._storage_available = True
+            return True
+
+        LOGGER.warning("AI assistant will continue without a persisted vector cache.")
+        self._storage_checked = True
+        self._storage_available = False
+        return False
+
     def _load_existing(self, signature: str) -> bool:
+        if not self._ensure_storage_ready():
+            return False
         if not self.manifest_path.exists() or not self.chunk_path.exists():
             return False
 
@@ -538,34 +607,43 @@ class PortalKnowledgeBase:
         if faiss is not None:
             index = faiss.IndexFlatIP(vectors.shape[1])
             index.add(vectors)
-            faiss.write_index(index, str(self.index_path))
             self._index = index
             self._matrix = None
-            if self.vector_path.exists():
-                self.vector_path.unlink()
         else:
-            np.save(self.vector_path, vectors)
             self._matrix = vectors
             self._index = None
 
-        self.chunk_path.write_text(
-            json.dumps([asdict(chunk) for chunk in chunks], ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        self.manifest_path.write_text(
-            json.dumps(
-                {
-                    "signature": signature,
-                    "chunk_size": self.chunk_size,
-                    "chunk_overlap": self.chunk_overlap,
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-
         self._chunks = chunks
         self._signature = signature
+
+        if not self._ensure_storage_ready():
+            return
+
+        try:
+            if self._index is not None:
+                faiss.write_index(self._index, str(self.index_path))
+                if self.vector_path.exists():
+                    self.vector_path.unlink()
+            else:
+                np.save(self.vector_path, vectors)
+
+            self.chunk_path.write_text(
+                json.dumps([asdict(chunk) for chunk in chunks], ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            self.manifest_path.write_text(
+                json.dumps(
+                    {
+                        "signature": signature,
+                        "chunk_size": self.chunk_size,
+                        "chunk_overlap": self.chunk_overlap,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+        except Exception as error:  # pragma: no cover - depends on filesystem/runtime
+            LOGGER.warning("Failed to persist AI vector cache. Continuing in memory only: %s", error)
 
     def _collect_chunks(self) -> list[AssistantChunk]:
         chunks: list[AssistantChunk] = []
@@ -618,7 +696,7 @@ class PortalKnowledgeBase:
                 f"Syllabus title: {item.title}. Class: {item.class_name}. Subject: {item.subject}. "
                 f"Academic year: {item.year}."
             )
-            file_text = _read_source_file(Path(item.file.path)) if item.file else ""
+            file_text = _read_file_field(item.file)
             documents.append(
                 {
                     "source_key": "syllabus",
@@ -678,7 +756,7 @@ class PortalKnowledgeBase:
                 "exam": item.exam,
                 "upload_date": item.upload_date.isoformat(),
             }
-            file_text = _read_source_file(Path(item.pdf_file.path)) if item.pdf_file else ""
+            file_text = _read_file_field(item.pdf_file)
             documents.append(
                 {
                     "source_key": "question-paper",
@@ -701,7 +779,7 @@ class PortalKnowledgeBase:
 
         for item in NewsEvent.objects.all().order_by("-news_date", "-id"):
             metadata = {"news_date": item.news_date.isoformat()}
-            attachment_text = _read_source_file(Path(item.attachment.path)) if item.attachment else ""
+            attachment_text = _read_file_field(item.attachment)
             documents.append(
                 {
                     "source_key": "news",
@@ -794,7 +872,7 @@ class PortalKnowledgeBase:
             if not file_field:
                 continue
             found_file = True
-            file_text = _read_source_file(Path(file_field.path))
+            file_text = _read_file_field(file_field)
             documents.append(
                 {
                     "source_key": source_key,
@@ -1123,31 +1201,39 @@ def build_assistant_reply(
     if not cleaned_message:
         raise AssistantRuntimeError("Message is required.")
 
-    query_profile = _classify_query(cleaned_message)
+    try:
+        query_profile = _classify_query(cleaned_message)
 
-    if query_profile.portal_scope and query_profile.resource_request:
-        return _build_portal_resource_reply()
+        if query_profile.portal_scope and query_profile.resource_request:
+            return _build_portal_resource_reply()
 
-    retrievals = _rerank_retrievals(
-        cleaned_message,
-        _KNOWLEDGE_BASE.retrieve(cleaned_message),
-        query_profile,
-        page_title,
-    )
-    system_prompt, user_prompt = _build_prompts(
-        message=cleaned_message,
-        history=history or [],
-        mode=mode,
-        page_path=page_path,
-        page_title=page_title,
-        retrievals=retrievals,
-        query_profile=query_profile,
-    )
+        retrievals = _rerank_retrievals(
+            cleaned_message,
+            _KNOWLEDGE_BASE.retrieve(cleaned_message),
+            query_profile,
+            page_title,
+        )
+        system_prompt, user_prompt = _build_prompts(
+            message=cleaned_message,
+            history=history or [],
+            mode=mode,
+            page_path=page_path,
+            page_title=page_title,
+            retrievals=retrievals,
+            query_profile=query_profile,
+        )
 
-    reply = ChatClient().generate_reply(system_prompt, user_prompt)
+        reply = ChatClient().generate_reply(system_prompt, user_prompt)
 
-    return {
-        "reply": reply,
-        "sources": _build_sources(retrievals, query_profile),
-        "language": _detect_language(cleaned_message),
-    }
+        return {
+            "reply": reply,
+            "sources": _build_sources(retrievals, query_profile),
+            "language": _detect_language(cleaned_message),
+        }
+    except (AssistantConfigurationError, AssistantRuntimeError):
+        raise
+    except Exception as error:  # pragma: no cover - defensive production guard
+        LOGGER.exception("Unexpected AI assistant failure.")
+        raise AssistantRuntimeError(
+            "The AI assistant encountered an unexpected server error."
+        ) from error

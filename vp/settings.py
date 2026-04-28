@@ -189,12 +189,11 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
-FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-STATICFILES_DIRS = [path for path in [FRONTEND_ASSETS_DIR] if path.exists()]
+STATICFILES_DIRS = [path for path in [FRONTEND_DIST_DIR] if path.exists()]
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",

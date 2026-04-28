@@ -1,5 +1,5 @@
+import logging
 import re
-from reportlab.pdfgen import canvas
 from io import BytesIO
 from pathlib import Path
 
@@ -15,6 +15,8 @@ from rest_framework.decorators import api_view, parser_classes, permission_class
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+
+from reportlab.pdfgen import canvas
 
 from .ai import (
     AssistantConfigurationError,
@@ -35,6 +37,7 @@ from .serializers import (
 
 
 FRONTEND_DIST_INDEX = Path(settings.BASE_DIR) / "frontend" / "dist" / "index.html"
+LOGGER = logging.getLogger(__name__)
 
 
 def get_choice_payload(choices):
@@ -457,6 +460,12 @@ def ai_chat_view(request):
     except AssistantRuntimeError as error:
         return Response(
             {"message": str(error)},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+    except Exception as error:  # pragma: no cover - defensive production guard
+        LOGGER.exception("Unexpected AI chat view failure: %s", error)
+        return Response(
+            {"message": "The assistant is temporarily unavailable. Please try again shortly."},
             status=status.HTTP_502_BAD_GATEWAY,
         )
 
