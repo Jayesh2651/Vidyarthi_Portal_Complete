@@ -5,3 +5,6 @@
 __pycache__/
 *.py[cod]
 frontend/dist/
+frontend/.env.local
+frontend/node_modules/
+.vercel/

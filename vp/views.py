@@ -1,13 +1,14 @@
-import platform
 import re
-from pathlib import Path
-
 from reportlab.pdfgen import canvas
 from io import BytesIO
+from pathlib import Path
+
 # import pdfkit
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
-from django.http import HttpResponse
+from django.db import connection
+from django.http import HttpResponse, HttpResponseRedirect
+from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
@@ -58,8 +59,12 @@ def serve_spa(request):
     if FRONTEND_DIST_INDEX.exists():
         return HttpResponse(FRONTEND_DIST_INDEX.read_text(encoding="utf-8"))
 
+    frontend_public_url = getattr(settings, "FRONTEND_PUBLIC_URL", "").rstrip("/")
+    if frontend_public_url:
+        return HttpResponseRedirect(f"{frontend_public_url}{request.get_full_path()}")
+
     return HttpResponse(
-        "React frontend has not been built yet. Run `npm install` and `npm run build` inside `frontend/`.",
+        "React frontend is deployed separately. Set FRONTEND_PUBLIC_URL or build the SPA inside `frontend/`.",
         status=503,
     )
 
@@ -68,7 +73,23 @@ def serve_spa(request):
 @permission_classes([AllowAny])
 @ensure_csrf_cookie
 def csrf_cookie(request):
-    return Response({"detail": "CSRF cookie set."})
+    return Response({"detail": "CSRF cookie set.", "csrfToken": get_token(request)})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def health_check(request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+    except Exception:
+        return Response(
+            {"status": "error", "database": "unavailable"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    return Response({"status": "ok", "database": "connected"})
 
 
 @api_view(["GET"])

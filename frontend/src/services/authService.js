@@ -1,8 +1,10 @@
-import apiClient from './apiClient'
+import apiClient, { setCsrfToken } from './apiClient'
 
 export const authService = {
-  ensureCsrf() {
-    return apiClient.get('/auth/csrf/')
+  async ensureCsrf() {
+    const response = await apiClient.get('/auth/csrf/')
+    setCsrfToken(response.data?.csrfToken)
+    return response
   },
   getSession() {
     return apiClient.get('/auth/session/')

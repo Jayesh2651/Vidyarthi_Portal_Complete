@@ -7,6 +7,7 @@ from . import views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/health/", views.health_check, name="api_health"),
     path("api/auth/csrf/", views.csrf_cookie, name="api_csrf"),
     path("api/auth/login/", views.login_view, name="api_login"),
     path("api/auth/logout/", views.logout_view, name="api_logout"),

@@ -1,6 +1,7 @@
 services:
   - type: web
     name: vidyarthi-portal
-    env: python
-    buildCommand: pip install -r requirements.txt && ./build.sh
+    runtime: python
+    buildCommand: bash build.sh
     startCommand: gunicorn vp.wsgi:application
+    healthCheckPath: /api/health/
