@@ -244,6 +244,9 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+# Keep admin/static templates working even if a deployment is missing a fresh
+# manifest, while still using hashed assets whenever collectstatic has run.
+WHITENOISE_MANIFEST_STRICT = env_bool("WHITENOISE_MANIFEST_STRICT", False)
 
 
 LOGIN_REDIRECT_URL = "/dashboard"
@@ -253,6 +256,7 @@ LOGOUT_REDIRECT_URL = "/login"
 default_frontend_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://vidyarthi-portal-complete.vercel.app",
     *VERCEL_DEPLOYMENT_ORIGINS,
 ]
 if FRONTEND_PUBLIC_URL:

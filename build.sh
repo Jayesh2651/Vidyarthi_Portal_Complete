@@ -12,3 +12,8 @@ python manage.py migrate --noinput
 
 echo "Collecting static files..."
 python manage.py collectstatic --noinput
+
+if [ ! -f staticfiles/staticfiles.json ]; then
+  echo "collectstatic did not create staticfiles/staticfiles.json" >&2
+  exit 1
+fi
