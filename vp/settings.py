@@ -109,11 +109,24 @@ ALLOWED_HOSTS = unique(
         "localhost",
         "127.0.0.1",
         "[::1]",
+
+        # Allow all Vercel deployments
         ".vercel.app",
+
+        # Your production domain
+        "vidyarthi-portal-complete.vercel.app",
+
+        # Public URLs
         origin_to_host(BACKEND_PUBLIC_URL),
         origin_to_host(FRONTEND_PUBLIC_URL),
+
+        # Deployment hosts from environment
         *VERCEL_DEPLOYMENT_HOSTS,
+
+        # Render fallback
         os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip(),
+
+        # Additional hosts from env
         *env_list("DJANGO_ALLOWED_HOSTS"),
     ]
 )
