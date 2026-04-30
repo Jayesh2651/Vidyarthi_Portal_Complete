@@ -1,19 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm --prefix frontend ci && npm --prefix frontend run build",
-  "outputDirectory": "frontend/dist",
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://vidyarthi-portal-complete-1.onrender.com/api/:path*"
-    },
-    {
-      "source": "/media/:path*",
-      "destination": "https://vidyarthi-portal-complete-1.onrender.com/media/:path*"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
+  "framework": "django",
+  "buildCommand": "BUILD_FRONTEND_WITH_DJANGO=1 bash ./build.sh"
 }

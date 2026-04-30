@@ -1,5 +1,3 @@
-from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, re_path
 
@@ -22,9 +20,8 @@ urlpatterns = [
     path("api/question-papers/", views.question_papers_view, name="api_question_papers"),
     path("api/news-links/", views.news_links_view, name="api_news_links"),
     path("api/download-pdf/", views.download_pdf, name="api_download_pdf"),
+    path("media/<path:path>", views.serve_media_file, name="media_file"),
 ]
-
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 urlpatterns += [
     re_path(r"^(?!api/|admin/|media/|static/).*$", views.serve_spa, name="spa"),
 ]

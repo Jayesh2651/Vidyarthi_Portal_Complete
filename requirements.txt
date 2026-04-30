@@ -13,3 +13,4 @@ PyJWT==2.9.0
 reportlab==4.4.2
 pillow==11.3.0
 requests==2.32.4
+vercel==0.5.8

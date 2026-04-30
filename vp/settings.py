@@ -56,6 +56,17 @@ def origin_to_host(origin):
     return urlparse(candidate).hostname or ""
 
 
+def host_to_origin(host):
+    candidate = host.strip()
+    if not candidate:
+        return ""
+
+    if "://" in candidate:
+        return candidate.rstrip("/")
+
+    return f"https://{candidate}"
+
+
 def unique(values):
     return list(dict.fromkeys(value for value in values if value))
 
@@ -73,11 +84,24 @@ SECRET_KEY = os.getenv(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool("DJANGO_DEBUG", False)
 
+VERCEL_DEPLOYMENT_HOSTS = unique(
+    [
+        os.getenv("VERCEL_URL", "").strip(),
+        os.getenv("VERCEL_BRANCH_URL", "").strip(),
+        os.getenv("VERCEL_PROJECT_PRODUCTION_URL", "").strip(),
+    ]
+)
+VERCEL_DEPLOYMENT_ORIGINS = unique(host_to_origin(host) for host in VERCEL_DEPLOYMENT_HOSTS)
+DEFAULT_VERCEL_PUBLIC_URL = next(iter(VERCEL_DEPLOYMENT_ORIGINS), "")
+
 BACKEND_PUBLIC_URL = os.getenv(
     "BACKEND_PUBLIC_URL",
-    "https://vidyarthi-portal-complete-1.onrender.com",
+    DEFAULT_VERCEL_PUBLIC_URL,
 ).rstrip("/")
-FRONTEND_PUBLIC_URL = os.getenv("FRONTEND_PUBLIC_URL", "").rstrip("/")
+FRONTEND_PUBLIC_URL = os.getenv(
+    "FRONTEND_PUBLIC_URL",
+    BACKEND_PUBLIC_URL or DEFAULT_VERCEL_PUBLIC_URL,
+).rstrip("/")
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 ALLOWED_HOSTS = unique(
@@ -85,7 +109,10 @@ ALLOWED_HOSTS = unique(
         "localhost",
         "127.0.0.1",
         "[::1]",
+        ".vercel.app",
         origin_to_host(BACKEND_PUBLIC_URL),
+        origin_to_host(FRONTEND_PUBLIC_URL),
+        *VERCEL_DEPLOYMENT_HOSTS,
         os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip(),
         *env_list("DJANGO_ALLOWED_HOSTS"),
     ]
@@ -189,6 +216,8 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
+FRONTEND_STATIC_INDEX = FRONTEND_DIST_DIR / "index.html"
+COLLECTED_STATIC_INDEX = Path(STATIC_ROOT) / "index.html"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -196,7 +225,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 STATICFILES_DIRS = [path for path in [FRONTEND_DIST_DIR] if path.exists()]
 STORAGES = {
     "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "BACKEND": "vp.storage.MediaStorage",
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
@@ -211,6 +240,7 @@ LOGOUT_REDIRECT_URL = "/login"
 default_frontend_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    *VERCEL_DEPLOYMENT_ORIGINS,
 ]
 if FRONTEND_PUBLIC_URL:
     default_frontend_origins.append(FRONTEND_PUBLIC_URL)
@@ -224,6 +254,7 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = unique(
     [
         *default_frontend_origins,
+        BACKEND_PUBLIC_URL,
         FRONTEND_PUBLIC_URL,
         *env_list("CSRF_TRUSTED_ORIGINS"),
     ]
@@ -234,10 +265,11 @@ SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
 SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000" if not DEBUG else "0"))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
 SECURE_HSTS_PRELOAD = SECURE_HSTS_SECONDS > 0
+USE_CROSS_SITE_COOKIES = env_bool("DJANGO_CROSS_SITE_COOKIES", False)
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
-SESSION_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
-CSRF_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
+SESSION_COOKIE_SAMESITE = "None" if USE_CROSS_SITE_COOKIES and not DEBUG else "Lax"
+CSRF_COOKIE_SAMESITE = "None" if USE_CROSS_SITE_COOKIES and not DEBUG else "Lax"
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 REST_FRAMEWORK = {

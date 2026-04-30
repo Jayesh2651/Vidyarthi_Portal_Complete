@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 import re
 from io import BytesIO
 from pathlib import Path
@@ -6,9 +7,11 @@ from pathlib import Path
 # import pdfkit
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
+from django.core.exceptions import SuspiciousFileOperation
 from django.db import connection
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.middleware.csrf import get_token
+from django.utils._os import safe_join
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes, permission_classes
@@ -36,7 +39,6 @@ from .serializers import (
 )
 
 
-FRONTEND_DIST_INDEX = Path(settings.BASE_DIR) / "frontend" / "dist" / "index.html"
 LOGGER = logging.getLogger(__name__)
 
 
@@ -59,8 +61,12 @@ def get_choice_payload(choices):
 
 @ensure_csrf_cookie
 def serve_spa(request):
-    if FRONTEND_DIST_INDEX.exists():
-        return HttpResponse(FRONTEND_DIST_INDEX.read_text(encoding="utf-8"))
+    for candidate in (
+        getattr(settings, "FRONTEND_STATIC_INDEX", None),
+        getattr(settings, "COLLECTED_STATIC_INDEX", None),
+    ):
+        if candidate and Path(candidate).exists():
+            return HttpResponse(Path(candidate).read_text(encoding="utf-8"))
 
     frontend_public_url = getattr(settings, "FRONTEND_PUBLIC_URL", "").rstrip("/")
     if frontend_public_url:
@@ -70,6 +76,21 @@ def serve_spa(request):
         "React frontend is deployed separately. Set FRONTEND_PUBLIC_URL or build the SPA inside `frontend/`.",
         status=503,
     )
+
+
+def serve_media_file(request, path):
+    try:
+        file_path = Path(safe_join(settings.MEDIA_ROOT, path))
+    except (SuspiciousFileOperation, ValueError):
+        raise Http404("File not found.")
+
+    if not file_path.is_file():
+        raise Http404("File not found.")
+
+    content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    response = FileResponse(file_path.open("rb"), content_type=content_type)
+    response["Cache-Control"] = "public, max-age=3600"
+    return response
 
 
 @api_view(["GET"])

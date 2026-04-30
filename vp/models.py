@@ -33,8 +33,8 @@ class Assignment(models.Model):
     year = models.CharField(max_length=10, choices=YEAR_CHOICES)
     semester = models.CharField(max_length=10, choices=SEMESTER_CHOICES,default='sem1')
     subject = models.CharField(max_length=100,default='Unknown')
-    theory_pdf = models.FileField(upload_to='assignments/theory/', blank=True)
-    practical_pdf = models.FileField(upload_to='assignments/practical/', blank=True)
+    theory_pdf = models.FileField(upload_to='assignments/theory/', blank=True, max_length=2048)
+    practical_pdf = models.FileField(upload_to='assignments/practical/', blank=True, max_length=2048)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -59,7 +59,7 @@ class Syllabus(models.Model):
     class_name = models.CharField(max_length=2, choices=CLASS_CHOICES)
     subject = models.CharField(max_length=100)
     year = models.CharField(max_length=4, choices=YEAR_CHOICES)
-    file = models.FileField(upload_to='syllabus_files/')
+    file = models.FileField(upload_to='syllabus_files/', max_length=2048)
     uploaded_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
@@ -87,8 +87,8 @@ class UnitTestUpload(models.Model):
     semester = models.CharField(max_length=10, choices=SEM_CHOICES, default='sem1')
     subject = models.CharField(max_length=100,default="Maths")
 
-    theory_pdf = models.FileField(upload_to='unit_tests/theory/', blank=True)
-    practical_pdf = models.FileField(upload_to='unit_tests/practical/', blank=True)
+    theory_pdf = models.FileField(upload_to='unit_tests/theory/', blank=True, max_length=2048)
+    practical_pdf = models.FileField(upload_to='unit_tests/practical/', blank=True, max_length=2048)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -101,7 +101,7 @@ class NewsEvent(models.Model):
     news_title = models.CharField(max_length=255)
     news_date = models.DateField()
     news_description = models.TextField()
-    attachment = models.FileField(upload_to='news_files/', blank=True, null=True)
+    attachment = models.FileField(upload_to='news_files/', blank=True, null=True, max_length=2048)
 
     def __str__(self):
         return self.news_title
@@ -132,7 +132,7 @@ class QuestionPaper(models.Model):
     exam = models.CharField(max_length=100, default='Midterm')
     subject = models.CharField(max_length=100)
     upload_date = models.DateField()
-    pdf_file = models.FileField(upload_to='question_papers/')
+    pdf_file = models.FileField(upload_to='question_papers/', max_length=2048)
     uploaded_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
