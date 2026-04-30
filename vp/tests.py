@@ -2,6 +2,7 @@ import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.test import Client, TestCase, override_settings
 from rest_framework.test import APIClient
 
@@ -95,6 +96,32 @@ class AuthIntegrationTests(TestCase):
         self.assertEqual(payload["user"]["username"], self.user.username)
         self.assertEqual(payload["user"]["password_hasher"], "pbkdf2_sha256")
         self.assertIn("engine", payload["database"])
+
+
+class CorsAndCsrfConfigurationTests(TestCase):
+    def test_csrf_endpoint_sets_cors_headers_for_allowed_vercel_origin(self):
+        origin = "https://vidyarthi-portal-complete.vercel.app"
+
+        response = self.client.get("/api/auth/csrf/", HTTP_ORIGIN=origin)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), origin)
+        self.assertEqual(response.headers.get("Access-Control-Allow-Credentials"), "true")
+
+    def test_cross_site_cookie_settings_match_deployment_defaults(self):
+        expected_origins = {
+            "https://vidyarthi-portal-complete.vercel.app",
+            "https://vidyarthi-portal-complete-git-main-jayjayes-projects.vercel.app",
+            "https://vidyarthi-portal-complete-12rntyrbb-jayjayes-projects.vercel.app",
+        }
+
+        self.assertTrue(expected_origins.issubset(set(settings.CORS_ALLOWED_ORIGINS)))
+        self.assertTrue(expected_origins.issubset(set(settings.CSRF_TRUSTED_ORIGINS)))
+        self.assertTrue(settings.CORS_ALLOW_CREDENTIALS)
+        self.assertEqual(settings.SESSION_COOKIE_SAMESITE, "None")
+        self.assertEqual(settings.CSRF_COOKIE_SAMESITE, "None")
+        self.assertTrue(settings.SESSION_COOKIE_SECURE)
+        self.assertTrue(settings.CSRF_COOKIE_SECURE)
 
 
 @override_settings(

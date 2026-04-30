@@ -104,16 +104,21 @@ VERCEL_DEPLOYMENT_HOSTS = unique(
 )
 VERCEL_DEPLOYMENT_ORIGINS = unique(host_to_origin(host) for host in VERCEL_DEPLOYMENT_HOSTS)
 DEFAULT_VERCEL_PUBLIC_URL = next(iter(VERCEL_DEPLOYMENT_ORIGINS), "")
+KNOWN_VERCEL_FRONTEND_ORIGINS = [
+    "https://vidyarthi-portal-complete.vercel.app",
+    "https://vidyarthi-portal-complete-git-main-jayjayes-projects.vercel.app",
+    "https://vidyarthi-portal-complete-12rntyrbb-jayjayes-projects.vercel.app",
+]
 RENDER_DEPLOYMENT_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
 RENDER_DEPLOYMENT_ORIGIN = host_to_origin(RENDER_DEPLOYMENT_HOST)
 
 BACKEND_PUBLIC_URL = os.getenv(
     "BACKEND_PUBLIC_URL",
-    RENDER_DEPLOYMENT_ORIGIN or DEFAULT_VERCEL_PUBLIC_URL,
+    RENDER_DEPLOYMENT_ORIGIN,
 ).rstrip("/")
 FRONTEND_PUBLIC_URL = os.getenv(
     "FRONTEND_PUBLIC_URL",
-    BACKEND_PUBLIC_URL or DEFAULT_VERCEL_PUBLIC_URL,
+    DEFAULT_VERCEL_PUBLIC_URL,
 ).rstrip("/")
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
@@ -128,7 +133,7 @@ ALLOWED_HOSTS = unique(
         ".onrender.com",
 
         # Your production domain
-        "vidyarthi-portal-complete.vercel.app",
+        *[origin_to_host(origin) for origin in KNOWN_VERCEL_FRONTEND_ORIGINS],
 
         # Public URLs
         origin_to_host(BACKEND_PUBLIC_URL),
@@ -163,10 +168,10 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -270,7 +275,7 @@ LOGOUT_REDIRECT_URL = "/login"
 default_frontend_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://vidyarthi-portal-complete.vercel.app",
+    *KNOWN_VERCEL_FRONTEND_ORIGINS,
     *VERCEL_DEPLOYMENT_ORIGINS,
 ]
 if FRONTEND_PUBLIC_URL:
@@ -290,7 +295,6 @@ CSRF_TRUSTED_ORIGINS = unique(
         *env_list("CSRF_TRUSTED_ORIGINS"),
     ]
 )
-
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
 SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000" if not DEBUG else "0"))
@@ -298,12 +302,18 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
 SECURE_HSTS_PRELOAD = SECURE_HSTS_SECONDS > 0
 USE_CROSS_SITE_COOKIES = env_bool(
     "DJANGO_CROSS_SITE_COOKIES",
-    urls_are_cross_site(BACKEND_PUBLIC_URL, FRONTEND_PUBLIC_URL),
+    True,
 )
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
-SESSION_COOKIE_SAMESITE = "None" if USE_CROSS_SITE_COOKIES and not DEBUG else "Lax"
-CSRF_COOKIE_SAMESITE = "None" if USE_CROSS_SITE_COOKIES and not DEBUG else "Lax"
+SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", True)
+CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", True)
+SESSION_COOKIE_SAMESITE = os.getenv(
+    "SESSION_COOKIE_SAMESITE",
+    "None" if USE_CROSS_SITE_COOKIES else "Lax",
+)
+CSRF_COOKIE_SAMESITE = os.getenv(
+    "CSRF_COOKIE_SAMESITE",
+    "None" if USE_CROSS_SITE_COOKIES else "Lax",
+)
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 REST_FRAMEWORK = {
@@ -337,7 +347,6 @@ LOGGING = {
         }
     },
 }
-
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
