@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -45,6 +46,55 @@ class AssistantIntegrationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["reply"], "Normalized reply")
+
+
+class AuthIntegrationTests(TestCase):
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=True)
+        self.password = "PortalPass123!"
+        self.user = get_user_model().objects.create_user(
+            username="portal-admin",
+            password=self.password,
+            is_staff=True,
+        )
+
+    def test_login_view_creates_a_persistent_session(self):
+        csrf_response = self.client.get("/api/auth/csrf/")
+        self.assertEqual(csrf_response.status_code, 200)
+
+        csrf_token = self.client.cookies["csrftoken"].value
+        response = self.client.post(
+            "/api/auth/login/",
+            data=json.dumps(
+                {
+                    "username": self.user.username,
+                    "password": self.password,
+                }
+            ),
+            content_type="application/json",
+            HTTP_REFERER="http://testserver/login/",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        session_response = self.client.get("/api/auth/session/")
+        self.assertEqual(session_response.status_code, 200)
+        self.assertTrue(session_response.json()["authenticated"])
+        self.assertEqual(session_response.json()["user"]["username"], self.user.username)
+
+    @override_settings(AUTH_DEBUG_TOKEN="debug-token")
+    def test_auth_debug_view_reports_database_and_user_details(self):
+        response = self.client.get(
+            f"/api/auth/debug/?username={self.user.username}",
+            HTTP_X_AUTH_DEBUG_TOKEN="debug-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["user"]["username"], self.user.username)
+        self.assertEqual(payload["user"]["password_hasher"], "pbkdf2_sha256")
+        self.assertIn("engine", payload["database"])
 
 
 @override_settings(

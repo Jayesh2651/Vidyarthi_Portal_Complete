@@ -6,11 +6,12 @@ from pathlib import Path
 
 # import pdfkit
 from django.conf import settings
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.core.exceptions import SuspiciousFileOperation
 from django.db import connection
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.middleware.csrf import get_token
+from django.utils.crypto import constant_time_compare
 from django.utils._os import safe_join
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
@@ -40,10 +41,74 @@ from .serializers import (
 
 
 LOGGER = logging.getLogger(__name__)
+User = get_user_model()
 
 
 def get_choice_payload(choices):
     return [{"value": value, "label": label} for value, label in choices]
+
+
+def auth_debug_logging_enabled():
+    return bool(getattr(settings, "AUTH_DEBUG_LOGGING", False))
+
+
+def get_database_debug_summary():
+    db_settings = settings.DATABASES.get("default", {})
+    summary = {
+        "engine": db_settings.get("ENGINE", ""),
+        "name": db_settings.get("NAME", ""),
+        "host": db_settings.get("HOST", ""),
+        "port": db_settings.get("PORT", ""),
+    }
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database(), current_user")
+            current_database, current_user = cursor.fetchone()
+        summary["current_database"] = current_database
+        summary["current_user"] = current_user
+    except Exception as error:  # pragma: no cover - diagnostic only
+        summary["connection_error"] = str(error)
+
+    return summary
+
+
+def get_user_debug_summary(user):
+    if not user:
+        return None
+
+    password_value = user.password or ""
+    password_hasher = password_value.split("$", 1)[0] if "$" in password_value else "plain_or_unknown"
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "is_active": user.is_active,
+        "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
+        "has_usable_password": user.has_usable_password(),
+        "password_hasher": password_hasher,
+        "last_login": user.last_login.isoformat() if user.last_login else None,
+    }
+
+
+def get_request_debug_summary(request):
+    return {
+        "host": request.get_host(),
+        "origin": request.headers.get("Origin", ""),
+        "referer": request.headers.get("Referer", ""),
+        "is_secure": request.is_secure(),
+        "session_key": request.session.session_key,
+        "session_cookie_present": settings.SESSION_COOKIE_NAME in request.COOKIES,
+        "csrf_cookie_present": settings.CSRF_COOKIE_NAME in request.COOKIES,
+    }
+
+
+def log_auth_event(event_name, **context):
+    if not auth_debug_logging_enabled():
+        return
+
+    LOGGER.info("%s | %s", event_name, context)
 
 
 # def build_pdf_configuration():
@@ -118,6 +183,48 @@ def health_check(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+def auth_debug_view(request):
+    debug_token = getattr(settings, "AUTH_DEBUG_TOKEN", "")
+    if not debug_token:
+        raise Http404("Not found.")
+
+    if not constant_time_compare(request.headers.get("X-Auth-Debug-Token", ""), debug_token):
+        return Response(
+            {"message": "Forbidden."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    username = request.query_params.get("username", "").strip()
+    user = User.objects.filter(username=username).first() if username else None
+
+    return Response(
+        {
+            "database": get_database_debug_summary(),
+            "request": get_request_debug_summary(request),
+            "session": {
+                "authenticated": request.user.is_authenticated,
+                "session_cookie_name": settings.SESSION_COOKIE_NAME,
+                "session_cookie_secure": settings.SESSION_COOKIE_SECURE,
+                "session_cookie_samesite": settings.SESSION_COOKIE_SAMESITE,
+                "csrf_cookie_name": settings.CSRF_COOKIE_NAME,
+                "csrf_cookie_secure": settings.CSRF_COOKIE_SECURE,
+                "csrf_cookie_samesite": settings.CSRF_COOKIE_SAMESITE,
+            },
+            "origins": {
+                "backend_public_url": getattr(settings, "BACKEND_PUBLIC_URL", ""),
+                "frontend_public_url": getattr(settings, "FRONTEND_PUBLIC_URL", ""),
+                "cors_allowed_origins": getattr(settings, "CORS_ALLOWED_ORIGINS", []),
+                "csrf_trusted_origins": getattr(settings, "CSRF_TRUSTED_ORIGINS", []),
+                "cross_site_cookies_enabled": getattr(settings, "USE_CROSS_SITE_COOKIES", False),
+            },
+            "exists": user is not None,
+            "user": get_user_debug_summary(user),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
 def portal_options(request):
     return Response(
         {
@@ -141,15 +248,42 @@ def portal_options(request):
 def login_view(request):
     username = request.data.get("username", "").strip()
     password = request.data.get("password", "")
+    candidate_user = User.objects.filter(username=username).first()
+
+    log_auth_event(
+        "auth.login.attempt",
+        username=username,
+        request=get_request_debug_summary(request),
+        user=get_user_debug_summary(candidate_user),
+        database=get_database_debug_summary(),
+    )
 
     user = authenticate(request, username=username, password=password)
     if not user:
+        if candidate_user and "$" not in (candidate_user.password or ""):
+            LOGGER.warning(
+                "Authentication failed for username=%s because the stored password is not hashed with Django.",
+                username,
+            )
+
+        log_auth_event(
+            "auth.login.failed",
+            username=username,
+            request=get_request_debug_summary(request),
+            user=get_user_debug_summary(candidate_user),
+        )
         return Response(
             {"message": "Invalid username or password."},
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
     login(request, user)
+    log_auth_event(
+        "auth.login.succeeded",
+        username=username,
+        request=get_request_debug_summary(request),
+        user=get_user_debug_summary(user),
+    )
     return Response(
         {
             "message": "Login successful.",
@@ -172,6 +306,13 @@ def logout_view(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def session_view(request):
+    log_auth_event(
+        "auth.session.check",
+        authenticated=request.user.is_authenticated,
+        request=get_request_debug_summary(request),
+        user=get_user_debug_summary(request.user) if request.user.is_authenticated else None,
+    )
+
     if not request.user.is_authenticated:
         return Response({"authenticated": False, "user": None})
 

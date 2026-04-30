@@ -71,6 +71,15 @@ def unique(values):
     return list(dict.fromkeys(value for value in values if value))
 
 
+def urls_are_cross_site(left, right):
+    if not left or not right:
+        return False
+
+    left_host = origin_to_host(left)
+    right_host = origin_to_host(right)
+    return bool(left_host and right_host and left_host != right_host)
+
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -83,6 +92,8 @@ SECRET_KEY = os.getenv(
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool("DJANGO_DEBUG", False)
+AUTH_DEBUG_LOGGING = env_bool("AUTH_DEBUG_LOGGING", False)
+AUTH_DEBUG_TOKEN = os.getenv("AUTH_DEBUG_TOKEN", "").strip()
 
 VERCEL_DEPLOYMENT_HOSTS = unique(
     [
@@ -93,10 +104,12 @@ VERCEL_DEPLOYMENT_HOSTS = unique(
 )
 VERCEL_DEPLOYMENT_ORIGINS = unique(host_to_origin(host) for host in VERCEL_DEPLOYMENT_HOSTS)
 DEFAULT_VERCEL_PUBLIC_URL = next(iter(VERCEL_DEPLOYMENT_ORIGINS), "")
+RENDER_DEPLOYMENT_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
+RENDER_DEPLOYMENT_ORIGIN = host_to_origin(RENDER_DEPLOYMENT_HOST)
 
 BACKEND_PUBLIC_URL = os.getenv(
     "BACKEND_PUBLIC_URL",
-    DEFAULT_VERCEL_PUBLIC_URL,
+    RENDER_DEPLOYMENT_ORIGIN or DEFAULT_VERCEL_PUBLIC_URL,
 ).rstrip("/")
 FRONTEND_PUBLIC_URL = os.getenv(
     "FRONTEND_PUBLIC_URL",
@@ -112,6 +125,7 @@ ALLOWED_HOSTS = unique(
 
         # Allow all Vercel deployments
         ".vercel.app",
+        ".onrender.com",
 
         # Your production domain
         "vidyarthi-portal-complete.vercel.app",
@@ -124,7 +138,7 @@ ALLOWED_HOSTS = unique(
         *VERCEL_DEPLOYMENT_HOSTS,
 
         # Render fallback
-        os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip(),
+        RENDER_DEPLOYMENT_HOST,
 
         # Additional hosts from env
         *env_list("DJANGO_ALLOWED_HOSTS"),
@@ -282,7 +296,10 @@ SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
 SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000" if not DEBUG else "0"))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
 SECURE_HSTS_PRELOAD = SECURE_HSTS_SECONDS > 0
-USE_CROSS_SITE_COOKIES = env_bool("DJANGO_CROSS_SITE_COOKIES", False)
+USE_CROSS_SITE_COOKIES = env_bool(
+    "DJANGO_CROSS_SITE_COOKIES",
+    urls_are_cross_site(BACKEND_PUBLIC_URL, FRONTEND_PUBLIC_URL),
+)
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "None" if USE_CROSS_SITE_COOKIES and not DEBUG else "Lax"
@@ -296,6 +313,29 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
     ],
+}
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+        }
+    },
+    "loggers": {
+        "vp": {
+            "handlers": ["console"],
+            "level": "INFO" if AUTH_DEBUG_LOGGING else "WARNING",
+            "propagate": False,
+        }
+    },
 }
 
 
