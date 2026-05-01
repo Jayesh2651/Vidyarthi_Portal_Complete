@@ -29,6 +29,16 @@ export function normalizeApiBaseURL(rawValue) {
 // Allow deployment envs to provide either the API root or just the backend origin.
 const configuredBaseURL = normalizeApiBaseURL(import.meta.env?.VITE_API_BASE_URL)
 
+export function buildBackendUrl(path = '/') {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+
+  if (/^https?:\/\//i.test(configuredBaseURL)) {
+    return new URL(normalizedPath, new URL(configuredBaseURL).origin).toString()
+  }
+
+  return normalizedPath
+}
+
 const apiClient = axios.create({
   baseURL: configuredBaseURL || '/api',
   withCredentials: true,

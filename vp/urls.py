@@ -5,9 +5,10 @@ from . import views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("auth/csrf/", views.csrf, name="csrf"),
     path("api/health/", views.health_check, name="api_health"),
     path("api/auth/debug/", views.auth_debug_view, name="api_auth_debug"),
-    path("api/auth/csrf/", views.csrf_cookie, name="api_csrf"),
+    path("api/auth/csrf/", views.csrf, name="api_csrf"),
     path("api/auth/login/", views.login_view, name="api_login"),
     path("api/auth/logout/", views.logout_view, name="api_logout"),
     path("api/auth/session/", views.session_view, name="api_session"),

@@ -99,6 +99,13 @@ class AuthIntegrationTests(TestCase):
 
 
 class CorsAndCsrfConfigurationTests(TestCase):
+    def test_plain_csrf_endpoint_sets_cookie_and_message(self):
+        response = self.client.get("/auth/csrf/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["message"], "CSRF cookie set")
+        self.assertIn("csrftoken", self.client.cookies)
+
     def test_csrf_endpoint_sets_cors_headers_for_allowed_vercel_origin(self):
         origin = "https://vidyarthi-portal-complete.vercel.app"
 

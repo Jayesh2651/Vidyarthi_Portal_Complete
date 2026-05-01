@@ -9,7 +9,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.core.exceptions import SuspiciousFileOperation
 from django.db import connection
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.middleware.csrf import get_token
 from django.utils.crypto import constant_time_compare
 from django.utils._os import safe_join
@@ -158,11 +158,9 @@ def serve_media_file(request, path):
     return response
 
 
-@api_view(["GET"])
-@permission_classes([AllowAny])
 @ensure_csrf_cookie
-def csrf_cookie(request):
-    return Response({"detail": "CSRF cookie set.", "csrfToken": get_token(request)})
+def csrf(request):
+    return JsonResponse({"message": "CSRF cookie set", "csrfToken": get_token(request)})
 
 
 @api_view(["GET"])

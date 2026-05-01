@@ -48,6 +48,10 @@ export default defineConfig(({ command, mode }) => {
                 target: devProxyTarget,
                 changeOrigin: true,
               },
+              '/auth': {
+                target: devProxyTarget,
+                changeOrigin: true,
+              },
               '/media': {
                 target: devProxyTarget,
                 changeOrigin: true,

@@ -60,7 +60,6 @@ export function AuthProvider({ children }) {
   }
 
   async function login(credentials) {
-    await authService.ensureCsrf()
     const response = await authService.login(credentials)
     startTransition(() => {
       setAuthState({
@@ -73,7 +72,6 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
-    await authService.ensureCsrf()
     await authService.logout()
     startTransition(() => {
       setAuthState({
