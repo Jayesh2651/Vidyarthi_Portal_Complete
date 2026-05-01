@@ -304,8 +304,8 @@ USE_CROSS_SITE_COOKIES = env_bool(
     "DJANGO_CROSS_SITE_COOKIES",
     True,
 )
-SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", True)
-CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", True)
+SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", not DEBUG)
+CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", not DEBUG)
 SESSION_COOKIE_SAMESITE = os.getenv(
     "SESSION_COOKIE_SAMESITE",
     "None" if USE_CROSS_SITE_COOKIES else "Lax",
@@ -352,3 +352,4 @@ LOGGING = {
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
