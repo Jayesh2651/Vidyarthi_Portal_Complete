@@ -18,13 +18,10 @@ export function Navigation() {
       <div className="site-header__inner page-container">
         <Link className="brand" to="/" onClick={closeMenu}>
           <img
-            alt=""
-            aria-hidden="true"
+            alt="Vidyarthi Mitra"
             className="brand__mark"
             decoding="async"
-            height="54"
-            src="/brand/vidyarthi-mitra-symbol.svg"
-            width="54"
+            src="/brand/vidyarthi-mitra-logo.svg"
           />
           <span className="brand__copy">
             <strong>Vidyarthi Mitra</strong>

@@ -5,7 +5,6 @@ export function FileInput({ id, label, accept = '.pdf', file, name, onChange, re
       <input
         accept={accept}
         id={id}
-        key={file?.name || `${id}-empty`}
         name={name}
         onChange={onChange}
         required={required}

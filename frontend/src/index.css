@@ -160,18 +160,18 @@ textarea {
 }
 
 .brand__mark {
-  width: 54px;
+  width: auto;
   height: 54px;
+  min-width: 54px;
   flex: 0 0 auto;
   object-fit: contain;
   filter:
-    drop-shadow(0 10px 20px rgba(6, 182, 212, 0.22))
-    drop-shadow(0 6px 18px rgba(122, 60, 255, 0.18));
+    drop-shadow(0 4px 12px rgba(6, 182, 212, 0.22));
 }
 
 .brand--compact .brand__mark {
-  width: 46px;
   height: 46px;
+  min-width: 46px;
 }
 
 .brand--compact .brand__copy {
