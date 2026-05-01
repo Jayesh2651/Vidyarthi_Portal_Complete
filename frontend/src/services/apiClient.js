@@ -1,6 +1,33 @@
 import axios from 'axios'
 
-const configuredBaseURL = (import.meta.env.VITE_API_BASE_URL || '/api').trim()
+export function normalizeApiBaseURL(rawValue) {
+  const candidate = (rawValue || '').trim()
+
+  if (!candidate || candidate === '/') {
+    return '/api'
+  }
+
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      const url = new URL(candidate)
+      const normalizedPathname = url.pathname.replace(/\/+$/, '')
+
+      url.pathname = !normalizedPathname || normalizedPathname === '/' ? '/api' : normalizedPathname
+      url.search = ''
+      url.hash = ''
+
+      return url.toString().replace(/\/+$/, '')
+    } catch {
+      // Fall through to relative-path normalization below.
+    }
+  }
+
+  const normalizedPath = `/${candidate.replace(/^\/+|\/+$/g, '')}`
+  return normalizedPath === '/' ? '/api' : normalizedPath
+}
+
+// Allow deployment envs to provide either the API root or just the backend origin.
+const configuredBaseURL = normalizeApiBaseURL(import.meta.env?.VITE_API_BASE_URL)
 
 const apiClient = axios.create({
   baseURL: configuredBaseURL || '/api',
