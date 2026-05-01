@@ -54,6 +54,7 @@ class AssignmentSerializer(FileUrlMixin, serializers.ModelSerializer):
 class SyllabusSerializer(FileUrlMixin, serializers.ModelSerializer):
     class_label = serializers.CharField(source="get_class_name_display", read_only=True)
     year_label = serializers.CharField(source="get_year_display", read_only=True)
+    semester_label = serializers.CharField(source="get_semester_display", read_only=True)
     file_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -66,11 +67,13 @@ class SyllabusSerializer(FileUrlMixin, serializers.ModelSerializer):
             "subject",
             "year",
             "year_label",
+            "semester",
+            "semester_label",
             "file",
             "file_url",
             "uploaded_at",
         ]
-        read_only_fields = ["id", "class_label", "year_label", "uploaded_at"]
+        read_only_fields = ["id", "class_label", "year_label", "semester_label", "uploaded_at"]
 
     def get_file_url(self, obj):
         return self.build_file_url(obj.file)
@@ -142,6 +145,7 @@ class ImportantLinkSerializer(serializers.ModelSerializer):
 
 class QuestionPaperSerializer(FileUrlMixin, serializers.ModelSerializer):
     class_label = serializers.CharField(source="get_class_name_display", read_only=True)
+    semester_label = serializers.CharField(source="get_semester_display", read_only=True)
     pdf_file_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -152,12 +156,14 @@ class QuestionPaperSerializer(FileUrlMixin, serializers.ModelSerializer):
             "class_label",
             "exam",
             "subject",
+            "semester",
+            "semester_label",
             "upload_date",
             "pdf_file",
             "pdf_file_url",
             "uploaded_at",
         ]
-        read_only_fields = ["id", "class_label", "uploaded_at"]
+        read_only_fields = ["id", "class_label", "semester_label", "uploaded_at"]
 
     def get_pdf_file_url(self, obj):
         return self.build_file_url(obj.pdf_file)

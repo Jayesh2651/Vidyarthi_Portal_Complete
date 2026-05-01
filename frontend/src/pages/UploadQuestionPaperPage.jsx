@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { FileInput } from '../components/forms/FileInput'
 import { SectionIntro } from '../components/ui/SectionIntro'
 import { StatusMessage } from '../components/ui/StatusMessage'
-import { questionPaperClasses, questionPaperExams } from '../data/portalContent'
+import { assignmentSemesters, questionPaperClasses, questionPaperExams } from '../data/portalContent'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { portalService } from '../services/portalService'
 
@@ -11,6 +11,7 @@ const initialForm = {
   class_name: '',
   exam: '',
   subject: '',
+  semester: '',
   upload_date: '',
   pdf_file: null,
 }
@@ -38,6 +39,7 @@ export function UploadQuestionPaperPage() {
     formData.append('class_name', form.class_name)
     formData.append('exam', form.exam)
     formData.append('subject', form.subject)
+    formData.append('semester', form.semester)
     formData.append('upload_date', form.upload_date)
     if (form.pdf_file) formData.append('pdf_file', form.pdf_file)
 
@@ -104,6 +106,18 @@ export function UploadQuestionPaperPage() {
                 type="text"
                 value={form.subject}
               />
+            </label>
+
+            <label className="form-field" htmlFor="paper-semester">
+              <span>Semester</span>
+              <select id="paper-semester" name="semester" onChange={handleChange} required value={form.semester}>
+                <option value="">Select Semester</option>
+                {assignmentSemesters.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="form-field" htmlFor="paper-date">

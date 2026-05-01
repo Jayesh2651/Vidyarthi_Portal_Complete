@@ -5,16 +5,17 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { LoadingState } from '../components/ui/LoadingState'
 import { ResourceCard } from '../components/ui/ResourceCard'
 import { SectionIntro } from '../components/ui/SectionIntro'
-import { questionPaperClasses, questionPaperExams } from '../data/portalContent'
+import { assignmentSemesters, questionPaperClasses, questionPaperExams } from '../data/portalContent'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { portalService } from '../services/portalService'
-import { formatDate } from '../utils/formatters'
+import { formatDate, joinMeta } from '../utils/formatters'
 
 const initialFilters = {
   year: '',
   class_name: '',
   exam: '',
+  semester: '',
 }
 
 export function QuestionPapersPage() {
@@ -25,7 +26,7 @@ export function QuestionPapersPage() {
 
   const { data, loading, error } = useAsyncData(
     () => portalService.getQuestionPapers(appliedFilters),
-    [appliedFilters.year, appliedFilters.class_name, appliedFilters.exam],
+    [appliedFilters.year, appliedFilters.class_name, appliedFilters.exam, appliedFilters.semester],
   )
 
   function handleChange(event) {
@@ -74,6 +75,13 @@ export function QuestionPapersPage() {
               type: 'select',
             },
             {
+              name: 'semester',
+              label: 'Semester',
+              options: assignmentSemesters,
+              placeholder: 'All semesters',
+              type: 'select',
+            },
+            {
               name: 'exam',
               label: 'Exam Session',
               options: questionPaperExams,
@@ -112,7 +120,7 @@ export function QuestionPapersPage() {
                   actions={paper.pdf_file_url ? [{ href: paper.pdf_file_url, label: 'Download PDF' }] : []}
                   eyebrow={paper.class_label}
                   key={paper.id}
-                  meta={formatDate(paper.upload_date)}
+                  meta={joinMeta([paper.semester_label, formatDate(paper.upload_date)])}
                   subtitle={paper.exam}
                   title={paper.subject}
                 />

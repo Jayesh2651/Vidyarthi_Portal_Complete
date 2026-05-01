@@ -231,11 +231,13 @@ def portal_options(request):
             "assignment_semesters": get_choice_payload(Assignment.SEMESTER_CHOICES),
             "syllabus_classes": get_choice_payload(Syllabus.CLASS_CHOICES),
             "syllabus_years": get_choice_payload(Syllabus.YEAR_CHOICES),
+            "syllabus_semesters": get_choice_payload(Syllabus.SEM_CHOICES),
             "unit_test_classes": get_choice_payload(UnitTestUpload.CLASS_CHOICES),
             "unit_test_years": get_choice_payload(UnitTestUpload.YEAR_CHOICES),
             "unit_test_semesters": get_choice_payload(UnitTestUpload.SEM_CHOICES),
             "question_paper_classes": get_choice_payload(QuestionPaper.CLASS_CHOICES),
             "question_paper_exams": get_choice_payload(QuestionPaper.EXAM_CHOICES),
+            "question_paper_semesters": get_choice_payload(QuestionPaper.SEM_CHOICES),
         }
     )
 
@@ -424,8 +426,37 @@ def assignments_view(request):
 def syllabus_view(request):
     if request.method == "GET":
         syllabi = Syllabus.objects.all().order_by("-uploaded_at")
+        class_name = request.query_params.get("class_name")
+        year = request.query_params.get("year")
+        semester = request.query_params.get("semester")
+        subject = request.query_params.get("subject")
+
+        if class_name:
+            syllabi = syllabi.filter(class_name=class_name)
+        if year:
+            syllabi = syllabi.filter(year=year)
+        if semester:
+            syllabi = syllabi.filter(semester=semester)
+        if subject:
+            syllabi = syllabi.filter(subject__icontains=subject.strip())
+
         return Response(
-            {"items": SyllabusSerializer(syllabi, many=True, context={"request": request}).data}
+            {
+                "options": {
+                    "years": sorted(
+                        Syllabus.objects.values_list("year", flat=True).distinct(),
+                        reverse=True,
+                    ),
+                    "semesters": sorted(
+                        Syllabus.objects.values_list("semester", flat=True).distinct()
+                    ),
+                },
+                "items": SyllabusSerializer(
+                    syllabi,
+                    many=True,
+                    context={"request": request},
+                ).data,
+            }
         )
 
     if not request.user.is_authenticated:
@@ -523,6 +554,7 @@ def question_papers_view(request):
         class_name = request.query_params.get("class_name")
         exam = request.query_params.get("exam")
         year = request.query_params.get("year")
+        semester = request.query_params.get("semester")
 
         if class_name:
             papers = papers.filter(class_name=class_name)
@@ -530,6 +562,8 @@ def question_papers_view(request):
             papers = papers.filter(exam=exam)
         if year:
             papers = papers.filter(exam__icontains=year)
+        if semester:
+            papers = papers.filter(semester=semester)
 
         years = set()
         for paper in QuestionPaper.objects.all():
@@ -540,6 +574,9 @@ def question_papers_view(request):
         return Response(
             {
                 "years": sorted(years, reverse=True),
+                "semesters": sorted(
+                    QuestionPaper.objects.values_list("semester", flat=True).distinct()
+                ),
                 "items": QuestionPaperSerializer(
                     papers,
                     many=True,

@@ -308,11 +308,11 @@ SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", not DEBUG)
 SESSION_COOKIE_SAMESITE = os.getenv(
     "SESSION_COOKIE_SAMESITE",
-    "None" if USE_CROSS_SITE_COOKIES else "Lax",
+    "Lax" if DEBUG else ("None" if USE_CROSS_SITE_COOKIES else "Lax"),
 )
 CSRF_COOKIE_SAMESITE = os.getenv(
     "CSRF_COOKIE_SAMESITE",
-    "None" if USE_CROSS_SITE_COOKIES else "Lax",
+    "Lax" if DEBUG else ("None" if USE_CROSS_SITE_COOKIES else "Lax"),
 )
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 

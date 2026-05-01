@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { FileInput } from '../components/forms/FileInput'
 import { SectionIntro } from '../components/ui/SectionIntro'
 import { StatusMessage } from '../components/ui/StatusMessage'
-import { assignmentYears, syllabusClasses } from '../data/portalContent'
+import { assignmentSemesters, assignmentYears, syllabusClasses } from '../data/portalContent'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { portalService } from '../services/portalService'
 
@@ -12,6 +12,7 @@ const initialForm = {
   class_name: '',
   subject: '',
   year: '',
+  semester: '',
   file: null,
 }
 
@@ -39,6 +40,7 @@ export function UploadSyllabusPage() {
     formData.append('class_name', form.class_name)
     formData.append('subject', form.subject)
     formData.append('year', form.year)
+    formData.append('semester', form.semester)
     if (form.file) formData.append('file', form.file)
 
     setSubmitting(true)
@@ -112,6 +114,18 @@ export function UploadSyllabusPage() {
               <select id="syllabus-year" name="year" onChange={handleChange} required value={form.year}>
                 <option value="">Select Year</option>
                 {assignmentYears.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="form-field" htmlFor="syllabus-semester">
+              <span>Semester</span>
+              <select id="syllabus-semester" name="semester" onChange={handleChange} required value={form.semester}>
+                <option value="">Select Semester</option>
+                {assignmentSemesters.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
